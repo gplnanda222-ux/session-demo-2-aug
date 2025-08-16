@@ -1,0 +1,6 @@
+__pycache__
+
+mlruns
+mlflow-artifacts
+outputs
+models
