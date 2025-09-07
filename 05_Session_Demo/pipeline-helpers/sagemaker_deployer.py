@@ -12,6 +12,7 @@ from datetime import datetime
 import sagemaker
 from sagemaker.sklearn.model import SKLearnModel
 from sagemaker import get_execution_role
+import re
 
 
 def create_sagemaker_inference_script():
@@ -80,6 +81,9 @@ def create_model_package():
     
     with open("model/inference.py", "w") as f:
         f.write(inference_code)
+
+    with open("inference.py", "w") as f:
+        f.write(inference_code)
     
     # Create model.tar.gz
     with tarfile.open("model.tar.gz", "w:gz") as tar:
@@ -88,6 +92,10 @@ def create_model_package():
     print("✅ Model package created: model.tar.gz")
     return "model.tar.gz"
 
+def sanitize_name(name: str, max_len: int = 60) -> str:
+    """Sanitize a string to meet SageMaker naming rules"""
+    safe = re.sub(r'[^a-zA-Z0-9-]', '-', name)
+    return safe[:max_len].rstrip('-')
 
 def deploy_to_sagemaker():
     """Deploy model to SageMaker"""
@@ -102,7 +110,8 @@ def deploy_to_sagemaker():
     
     # Initialize SageMaker session
     session = sagemaker.Session()
-    role = os.getenv("SAGEMAKER_ROLE", get_execution_role())
+    # role = os.getenv("SAGEMAKER_ROLE", get_execution_role())
+    role = "arn:aws:iam::750952118292:role/service-role/AmazonSageMaker-ExecutionRole-20250615T204995"
     
     # Upload model to S3
     bucket = session.default_bucket()
@@ -116,14 +125,19 @@ def deploy_to_sagemaker():
     print(f"📤 Model uploaded to: {model_s3_uri}")
     
     # Create SageMaker model
-    model_name = f"loan-approval-{manifest['pipeline_id']}"
+    raw_model_name = f"loan-approval-{manifest['pipeline_id']}"
+    model_name = sanitize_name(raw_model_name)
+
+    raw_endpoint_name = f"loan-approval-endpoint-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    endpoint_name = sanitize_name(raw_endpoint_name)
+
     endpoint_name = f"loan-approval-endpoint-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     
     sklearn_model = SKLearnModel(
         model_data=model_s3_uri,
         role=role,
         entry_point="inference.py",
-        framework_version="1.0-1",
+        framework_version="1.2-1",
         py_version="py3",
         name=model_name
     )
